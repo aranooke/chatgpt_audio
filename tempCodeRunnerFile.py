@@ -62,7 +62,7 @@ def send_text(message):
     bot.send_message(message.chat.id,f"You said:{text}");
     txt = translate_text(text,"ru","en");
     translate_result = ask_gpt(txt)[0:500-1];
-    # translate_result = translate_text(translate_result,"en","ru");
+    translate_result = translate_text(translate_result,"en","ru");
     bot.send_message(message.chat.id,translate_result,reply_markup=keyboard);
 def call_translate(message):
     res = message;
@@ -211,7 +211,7 @@ def handle_audio(message):
         downloaded_file = bot.download_file(file_info.file_path)
 
         # Specify the directory to save the audio files
-        save_directory = 'audiofiles/'
+        save_directory = 'path/to/save/audiofiles/'
 
         # Create the save directory if it doesn't exist
         os.makedirs(save_directory, exist_ok=True)
