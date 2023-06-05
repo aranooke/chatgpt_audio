@@ -1,7 +1,6 @@
 import telebot,os,convert
 from convert import convert_ogg_to_wav;
 import speech
-import threading
 import config;
 import to_speech;
 from telebot import types
@@ -11,41 +10,85 @@ import database
 from trans import translate_text
 import image_maker;
 import sqlite3
-conn = sqlite3.connect('bot_database.db')
+
+
+
+#conn = sqlite3.connect('bot_database.db')
+telebot_api = os.environ["TELEBOT_API"];
 bot = telebot.TeleBot("6054271853:AAGn-jrBu1FzN1HTR3yzY7YknT7DrSHwnYg", parse_mode=None) # You can set parse_mode by default. HTML or MARKDOWN
+db = database.Database();
+
+
+openai_api = "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";
+#aopenai_api = os.environ["OPENAI_API_KEY"];
+chatgpt.openai.api_key = openai_api;
+
 global language;
 language = "en-US";
 buttons = ['English','Українська','Російська'];
 langs = ["en-US","uk-UA","ru-RU"]
 txt = "";
-@bot.message_handler(commands=['api'])
-def set_api(message):
-    text = "";
+
+
+@bot.message_handler(commands=['setapi'])
+def set(message):
+    db = database.Database();
+    chat_id = message.chat.id
+    api_key = message.text.split("setapi")[1].strip()
+
+    conn = sqlite3.connect('chatgpt.db')
+    cursor = conn.cursor()
+
+    put_data = 'INSERT OR REPLACE INTO api_keys (chat_id, api) VALUES (?, ?)'
+    cursor.execute(put_data, (chat_id, api_key))
+    conn.commit()
+
+    api_query = 'SELECT api FROM api_keys WHERE chat_id = ?'
+    cursor.execute(api_query, (chat_id,))
+    api_key = cursor.fetchone()[0]
+
+    conn.close()
+
+    bot.send_message(chat_id, api_key)
+def get_api_key(chat_id):
+    conn = sqlite3.connect('chatgpt.db')
+    cursor = conn.cursor()
+
+    # Retrieve the API key for the user
+    cursor.execute("SELECT api FROM api_keys WHERE chat_id = ?", (chat_id,))
+    api = cursor.fetchone()[0]  # Fetch the first column of the result
+
+    conn.close()
+
+    return api
+
+# @bot.message_handler(commands=['api'])
+# def set_api(message):
+#     text = "";
+#     try:
+#         text = message.text.split("/api")[1];
+#     except Exception:
+#         bot.send_message("Enter your valid api key");
+#     chatgpt.openai.api_key = text;
+#     bot.send_message(message.chat.id,text);
+#     chat_id = message.chat.id;
+#     #database.set_api(conn,chat_id,text)
+#     try:
+#         chatgpt.ask_gpt("that`s test");
+#         bot.send_message("Your API is working and save in database.")
+#     except Exception as e:
+#         bot.send_message(message.chat.id, "Some problem with api, check it or change...");
     
-    try:
-        text = message.text.split("/api")[1];
-    except Exception:
-        bot.send_message("Enter your valid api key");
-    chatgpt.openai.api_key = text;
-    bot.send_message(message.chat.id,text);
-    chat_id = message.chat.id;
-    database.set_api(conn,chat_id,text)
-    try:
-        chatgpt.ask_gpt("that`s test");
-        bot.send_message("Your API is working and save in database.")
-    except Exception as e:
-        bot.send_message(message.chat.id, "Some problem with api, check it or change...");
-    
-@bot.message_handler(commands=['getapi'])
-def check_api(message):
-        cursor = conn.cursor();
-        request = '''
-        SELECT api FROM users where chat_id = ?
-        ''',(message.chat.id);
-        cursor.execute(request);
-        result = cursor.fetchone();
-        bot.send_message(message.chat.id,"Your api is {?}",(result))
-     
+# @bot.message_handler(commands=['getapi'])
+# def check_api(message):
+#         cursor = conn.cursor();
+#         request = '''
+#         SELECT api FROM users where chat_id = ?
+#         ''',(message.chat.id);
+#         cursor.execute(request);
+#         result = cursor.fetchone();
+#         bot.send_message(message.chat.id,"Your api is {?}",(result))
+
 @bot.message_handler(commands=['send'])
 def send_text(message):
     lang = "";
@@ -59,9 +102,16 @@ def send_text(message):
     except Exception as e:
         bot.send_message(message.chat.id,f"Попробуйте ще раз ввести команду");
     
+
+    
+    api = get_api_key(message.chat.id)
+    
+
+    chatgpt.openai.api_key = api
+
     bot.send_message(message.chat.id,f"You said:{text}");
     txt = translate_text(text,"ru","en");
-    translate_result = ask_gpt(txt)[0:500-1];
+    translate_result = ask_gpt(txt);
     # translate_result = translate_text(translate_result,"en","ru");
     bot.send_message(message.chat.id,translate_result,reply_markup=keyboard);
 def call_translate(message):
@@ -106,7 +156,7 @@ def handle_callback_query(call):
         bot.send_photo(call.message.chat.id,open(r"images/img1.png", "rb"),caption="Black white filter photo")
     elif call.data == "rotate_image":
         image_maker.rotate_image(90);
-        bot.send_photo(call.message.chat.id,open(r"images/img1.png", "rb"),caption="Black white filter photo")
+        bot.send_photo(call.message.chat.id,open(r"images/img1.png", "rb"),caption="Rotated_photo")
     else:
         # Handle other callback data if needed
         pass    
@@ -138,6 +188,8 @@ def handle_voice(message):
             print("e");
     bot.send_message(message.chat.id,f'You said:{text}');
     text = translate_text(text,language[0:2],"en");
+    api = get_api_key(message.chat.id)
+    chatgpt.openai.api_key = api
     result_from_gpt = ask_gpt(text,temperature=0.5,max_tokens=512);
     bot.send_message(message.chat.id, result_from_gpt,reply_markup=keyboard);    
 @bot.message_handler(commands=["select"])
@@ -188,7 +240,7 @@ def send_img(message):
     
 
     except Exception as e:
-        bot.send_message(message.chat.id,"Some problem with image generation \n Try again later...")
+        bot.send_message(message.chat.id,f"Some problem with image generation \n Try again later... {e}")
 @bot.message_handler(content_types=['text'])
 def text_work(message):
     for key in range(len(buttons)):
@@ -199,7 +251,25 @@ def text_work(message):
         bot.send_message(message.chat.id,translate_text(txt,"en","ru"));
     elif message.text == "Перевести на украинский":
         bot.send_message(message.chat.id,translate_text(txt,"en","ua"));
-
+@bot.message_handler(commands=['temperature','tokens','model'])
+def change_settings(message):
+    list_commands = ["temperature","tokens","model"];
+    models = ["text-davinci-003","text-davinci-002"];
+    statements = [lambda x:(0 <= len(x) <= 1),
+                  lambda x:(0 <= x <= 500),
+                  lambda x,mod:x in mod];
+    for i in range(len(list_commands)):
+        mes = message.text.split(i)[0]
+        if mes == list_commands[i]:
+            res = message.text.split(i)[1];
+            func = statements[i];
+            if func(res) == True:
+                pass;
+            else:
+                bot.send_message(message.chat.id,
+                                 "Невірний формат значення, дивіться у /settings");
+            
+    pass;
 @bot.message_handler(content_types=['audio'])
 def handle_audio(message):
     # Check if an audio file is attached to the message
@@ -229,6 +299,8 @@ def handle_audio(message):
         text = speech.recognize_speech("file.wav");
         bot.send_message(message.chat.id,f"You said:{text}");
         print(text);
+        api = get_api_key(message.chat.id)
+        chatgpt.openai.api_key = api
         res = ask_gpt(text);
         
         with open("file.wav", 'rb') as voice:

@@ -31,3 +31,4 @@ def detect_language(text):
             return detected_text;
         except Exception:
             return "Error with detecting language";
+
